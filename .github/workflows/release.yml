@@ -1,0 +1,37 @@
+name: Release artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Build version (dev or a v-prefixed semantic version)'
+        required: true
+        default: dev
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./... -timeout 2m
+      - run: go vet ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+      - name: Build archives and checksums
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: go run ./scripts/release.go -version "$RELEASE_VERSION"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fget-release
+          path: dist/*
+          if-no-files-found: error

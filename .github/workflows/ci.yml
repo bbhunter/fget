@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go: ['1.26.x', '1.27.1']
+    runs-on: ${{ matrix.os }}
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+      - run: go mod download
+      - run: go mod verify
+      - name: Check formatting
+        shell: pwsh
+        run: |
+          $unformatted = gofmt -l (Get-ChildItem -Recurse -Filter *.go | ForEach-Object FullName)
+          if ($unformatted) { throw "Run gofmt on: $unformatted" }
+      - run: go vet ./...
+      - run: go test ./... -timeout 2m -cover
+      - run: go build ./...
+      - name: Check module files
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: Race detector
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.1'
+        run: go test -race ./... -timeout 2m
+
+  vulnerabilities:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...

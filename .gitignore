@@ -15,3 +15,9 @@
 # vendor/
 
 .vscode/launch.json
+
+# Local downloads and release artifacts
+/results/
+/dist/
+/fget
+*.part
